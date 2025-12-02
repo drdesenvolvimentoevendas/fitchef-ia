@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-yellow: #FFB300;
+  --color-brand-yellow-light: #FFD967;
+  --color-brand-black: #0B0B0B;
+  --color-brand-gray: #F5F5F5;
+
+  --font-inter: var(--font-inter);
+}
+
+html, body {
+  user-select: none;
+  cursor: default;
+}
+
+:root {
+  --background: #ffffff;
+  --foreground: #0B0B0B;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-inter), sans-serif;
+}
