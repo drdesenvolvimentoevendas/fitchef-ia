@@ -4,8 +4,23 @@ import Image from "next/image";
 import { ArrowRight, ChefHat, Clock, Sparkles, CheckCircle2, Star, TrendingUp, Camera, User } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import { createClient } from "@/utils/supabase/client";
+import { useRouter } from "next/navigation";
 
 export default function Home() {
+  const router = useRouter();
+  const supabase = createClient();
+
+  // Redirect if logged in
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        router.push("/generate");
+      }
+    };
+    checkUser();
+  }, [router, supabase]);
   // Carousel Logic
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const carouselImages = [
