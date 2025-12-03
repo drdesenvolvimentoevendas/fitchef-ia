@@ -338,6 +338,8 @@ function GenerateContent() {
                                             rows={4}
                                             className="w-full rounded-2xl border-2 border-white/10 bg-black/20 focus:bg-black/40 focus:border-brand-yellow focus:ring-4 focus:ring-brand-yellow/10 text-lg p-6 text-white placeholder:text-gray-500 transition-all resize-none"
                                             placeholder="Ex: 2 ovos, meio pacote de macarrão, frango desfiado, cenoura..."
+                                            aria-label="Ingredientes disponíveis"
+                                            aria-required="true"
                                             onKeyDown={(e) => {
                                                 if (e.key === 'Enter' && !e.shiftKey) {
                                                     e.preventDefault();
@@ -393,6 +395,7 @@ function GenerateContent() {
                                 <button
                                     type="submit"
                                     disabled={isLoading}
+                                    aria-label={isLoading ? loadingMessage : generationMode === 'single' ? 'Criar receita' : 'Gerar cardápio completo'}
                                     className="w-full py-6 bg-brand-yellow text-brand-black font-bold rounded-2xl hover:bg-brand-yellow-light transition-all transform hover:scale-[1.02] active:scale-[0.98] shadow-xl shadow-brand-yellow/20 flex items-center justify-center gap-3 text-lg disabled:opacity-80 disabled:cursor-not-allowed group relative overflow-hidden"
                                 >
                                     {isLoading ? (

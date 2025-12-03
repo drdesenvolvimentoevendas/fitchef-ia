@@ -5,16 +5,22 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/utils/supabase/server'
 
 export async function login(formData: FormData) {
-
     const supabase = await createClient()
 
     const email = formData.get('email') as string
     const password = formData.get('password') as string
 
+    // Validação básica
+    if (!email || !email.includes('@')) {
+        return redirect('/login?error=' + encodeURIComponent('Email inválido'))
+    }
 
+    if (!password || password.length < 6) {
+        return redirect('/login?error=' + encodeURIComponent('Senha deve ter pelo menos 6 caracteres'))
+    }
 
     const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: email.trim().toLowerCase(),
         password,
     })
 
@@ -34,21 +40,32 @@ export async function login(formData: FormData) {
 }
 
 export async function signup(formData: FormData) {
-
     const supabase = await createClient()
 
     const email = formData.get('email') as string
     const password = formData.get('password') as string
+    const name = formData.get('name') as string
 
+    // Validação de dados
+    if (!email || !email.includes('@')) {
+        return redirect('/login?error=' + encodeURIComponent('Email inválido'))
+    }
 
+    if (!password || password.length < 6) {
+        return redirect('/login?error=' + encodeURIComponent('Senha deve ter pelo menos 6 caracteres'))
+    }
+
+    if (!name || name.trim().length < 2) {
+        return redirect('/login?error=' + encodeURIComponent('Nome deve ter pelo menos 2 caracteres'))
+    }
 
     const { data, error } = await supabase.auth.signUp({
-        email,
+        email: email.trim().toLowerCase(),
         password,
         options: {
             emailRedirectTo: `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/auth/callback`,
             data: {
-                name: formData.get('name') as string,
+                name: name.trim(),
             }
         },
     })
@@ -61,15 +78,21 @@ export async function signup(formData: FormData) {
 
 
     if (data.user) {
-        const name = formData.get('name') as string;
-        if (name) {
+        const trimmedName = name.trim();
+        if (trimmedName) {
             // Tenta atualizar o perfil, mas não bloqueia se falhar (ex: coluna não existe)
             const { error: profileError } = await supabase
                 .from('profiles')
-                .upsert({ id: data.user.id, name }, { onConflict: 'id' });
+                .upsert({ 
+                    id: data.user.id, 
+                    name: trimmedName,
+                    plan_tier: 'free',
+                    is_premium: false
+                }, { onConflict: 'id' });
 
             if (profileError) {
                 console.error("Erro ao atualizar perfil:", profileError);
+                // Não bloqueia o cadastro se falhar ao criar perfil
             }
         }
     }

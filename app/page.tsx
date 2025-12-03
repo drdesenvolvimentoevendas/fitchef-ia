@@ -64,8 +64,7 @@ export default function Home() {
     <div className="min-h-screen bg-white text-brand-black font-sans selection:bg-brand-yellow selection:text-brand-black overflow-x-hidden">
 
       {/* Navbar */}
-      {/* Navbar */}
-      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-400 ${isScrolled ? "bg-white/10 backdrop-blur-md border-b border-transparent py-0.1" : "bg-transparent border-b border-transparent py-6"}`}>
+      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-400 ${isScrolled ? "bg-white/10 backdrop-blur-md border-b border-transparent py-0.1" : "bg-transparent border-b border-transparent py-6"}`} role="navigation" aria-label="Navegação principal">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-2">
@@ -75,8 +74,8 @@ export default function Home() {
               <span className={`font-bold text-xl tracking-tight transition-colors ${isScrolled ? "text-brand-black" : "text-white"}`}>FitChef IA</span>
             </div>
             <div className="hidden md:flex items-center gap-8">
-              <a href="#benefits" className={`text-sm font-medium transition-colors ${isScrolled ? "text-brand-black hover:text-brand-yellow" : "text-white/90 hover:text-white"}`}>Benefícios</a>
-              <a href="#social-proof" className={`text-sm font-medium transition-colors ${isScrolled ? "text-brand-black hover:text-brand-yellow" : "text-white/90 hover:text-white"}`}>Resultados</a>
+              <a href="#benefits" className={`text-sm font-medium transition-colors ${isScrolled ? "text-brand-black hover:text-brand-yellow" : "text-white/90 hover:text-white"}`} aria-label="Ir para seção de benefícios">Benefícios</a>
+              <a href="#social-proof" className={`text-sm font-medium transition-colors ${isScrolled ? "text-brand-black hover:text-brand-yellow" : "text-white/90 hover:text-white"}`} aria-label="Ir para seção de resultados">Resultados</a>
             </div>
             {user ? (
               <Link href="/profile" className={`px-5 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-2 ${isScrolled ? "bg-brand-black text-white hover:bg-gray-800" : "bg-white text-brand-black hover:bg-gray-100"}`}>
@@ -122,7 +121,7 @@ export default function Home() {
 
           <h1 className="text-5xl sm:text-7xl font-extrabold tracking-tight leading-tight mb-6 drop-shadow-lg">
             Comida Fit Sem Graça, <br />
-            <span className="text-brand-yellow">Nunca Mais.</span>
+            <span className="text-brand-yellow" aria-label="Nunca mais">Nunca Mais.</span>
           </h1>
 
           <p className="text-lg sm:text-2xl text-gray-200 leading-relaxed max-w-3xl mx-auto mb-10 font-light">

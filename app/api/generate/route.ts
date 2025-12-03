@@ -4,17 +4,60 @@ import { createClient } from "@/utils/supabase/server";
 
 export async function POST(req: Request) {
     try {
-        const supabase = await createClient();
-        const { data: { user } } = await supabase.auth.getUser();
+        // Validação de variáveis de ambiente
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+            console.error("GEMINI_API_KEY não configurada");
+            return NextResponse.json(
+                { error: "Erro de configuração do servidor. Entre em contato com o suporte." },
+                { status: 500 }
+            );
+        }
 
-        if (!user) {
+        const supabase = await createClient();
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+        if (authError || !user) {
             return NextResponse.json(
                 { error: "Usuário não autenticado." },
                 { status: 401 }
             );
         }
 
-        const { ingredients, goal, time, mode = 'single' } = await req.json();
+        // Validação de dados de entrada
+        let body;
+        try {
+            body = await req.json();
+        } catch (parseError) {
+            return NextResponse.json(
+                { error: "Dados inválidos. Verifique o formato da requisição." },
+                { status: 400 }
+            );
+        }
+
+        const { ingredients, goal, time, mode = 'single' } = body;
+
+        // Validação de campos obrigatórios
+        if (!ingredients || typeof ingredients !== 'string' || ingredients.trim().length === 0) {
+            return NextResponse.json(
+                { error: "Ingredientes são obrigatórios." },
+                { status: 400 }
+            );
+        }
+
+        if (!goal || typeof goal !== 'string') {
+            return NextResponse.json(
+                { error: "Objetivo é obrigatório." },
+                { status: 400 }
+            );
+        }
+
+        if (mode !== 'single' && mode !== 'daily') {
+            return NextResponse.json(
+                { error: "Modo inválido. Use 'single' ou 'daily'." },
+                { status: 400 }
+            );
+        }
 
         // Check Plan Tier FIRST
         const { data: profile } = await supabase
@@ -95,16 +138,6 @@ export async function POST(req: Request) {
                     );
                 }
             }
-        }
-
-        const apiKey = process.env.GEMINI_API_KEY;
-
-        if (!apiKey) {
-            console.error("API Key is missing in process.env");
-            return NextResponse.json(
-                { error: "API Key não configurada. Adicione GEMINI_API_KEY ao arquivo .env.local" },
-                { status: 500 }
-            );
         }
 
         const genAI = new GoogleGenerativeAI(apiKey);
@@ -201,9 +234,29 @@ export async function POST(req: Request) {
             `;
         }
 
-        const result = await model.generateContent(prompt);
+        // Geração de conteúdo com tratamento de erros
+        let result;
+        try {
+            result = await model.generateContent(prompt);
+        } catch (aiError: any) {
+            console.error("Erro na API do Gemini:", aiError);
+            return NextResponse.json(
+                { error: "Erro ao gerar receita. Tente novamente em alguns instantes." },
+                { status: 503 }
+            );
+        }
+
         const response = await result.response;
         let text = response.text();
+
+        // Validação de resposta vazia
+        if (!text || text.trim().length === 0) {
+            console.error("Resposta vazia da IA");
+            return NextResponse.json(
+                { error: "A IA não retornou uma resposta válida. Tente novamente." },
+                { status: 500 }
+            );
+        }
 
         // Limpar markdown se houver (```json ... ```)
         text = text.replace(/```json/g, "").replace(/```/g, "").trim();
@@ -211,25 +264,37 @@ export async function POST(req: Request) {
         let recipe;
         try {
             recipe = JSON.parse(text);
-        } catch (e) {
-            console.error("Erro ao fazer parse do JSON:", text);
+        } catch (parseError) {
+            console.error("Erro ao fazer parse do JSON:", text.substring(0, 200));
             return NextResponse.json(
                 { error: "Erro ao processar resposta da IA. Tente novamente." },
                 { status: 500 }
             );
         }
 
-        // Increment Usage Count
-        const { error: upsertError } = await supabase
-            .from('daily_usage')
-            .upsert({
-                user_id: user.id,
-                date: today,
-                count: (usage?.count || 0) + 1
-            }, { onConflict: 'user_id, date' });
+        // Validação básica da estrutura da receita
+        if (!recipe.title || !recipe.ingredients || !recipe.instructions) {
+            console.error("Estrutura de receita inválida:", recipe);
+            return NextResponse.json(
+                { error: "A receita gerada está incompleta. Tente novamente." },
+                { status: 500 }
+            );
+        }
 
-        if (upsertError) {
-            console.error("Erro ao atualizar uso diário:", upsertError);
+        // Increment Usage Count (apenas para usuários free)
+        if (!isUnlimited) {
+            const { error: upsertError } = await supabase
+                .from('daily_usage')
+                .upsert({
+                    user_id: user.id,
+                    date: today,
+                    count: (usage?.count || 0) + 1
+                }, { onConflict: 'user_id, date' });
+
+            if (upsertError) {
+                console.error("Erro ao atualizar uso diário:", upsertError);
+                // Não bloqueia a resposta, apenas loga o erro
+            }
         }
 
         // Generate Image URL
@@ -237,24 +302,41 @@ export async function POST(req: Request) {
         const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(imagePrompt)}, professional food photography, 4k, high detail, appetizing, soft lighting?width=800&height=600&nologo=true&seed=${Math.floor(Math.random() * 10000)}`;
         recipe.imageUrl = imageUrl;
 
-        // Save Recipe to History
-        const { error: saveError } = await supabase
-            .from('saved_recipes')
-            .insert({
-                user_id: user.id,
-                title: recipe.title,
-                recipe_data: recipe
-            });
+        // Save Recipe to History (não bloqueia se falhar)
+        try {
+            const { error: saveError } = await supabase
+                .from('saved_recipes')
+                .insert({
+                    user_id: user.id,
+                    title: recipe.title,
+                    recipe_data: recipe
+                });
 
-        if (saveError) {
-            console.error("Erro ao salvar receita no histórico:", saveError);
+            if (saveError) {
+                console.error("Erro ao salvar receita no histórico:", saveError);
+                // Não bloqueia a resposta, apenas loga o erro
+            }
+        } catch (saveException) {
+            console.error("Exceção ao salvar receita:", saveException);
+            // Continua mesmo se falhar ao salvar
         }
 
         return NextResponse.json(recipe);
     } catch (error: any) {
         console.error("Erro detalhado na API:", error);
+        
+        // Mensagens de erro mais amigáveis
+        const errorMessage = error.message || "Erro desconhecido";
+        let userMessage = "Ocorreu um erro ao gerar sua receita. Tente novamente.";
+        
+        if (errorMessage.includes("network") || errorMessage.includes("fetch")) {
+            userMessage = "Erro de conexão. Verifique sua internet e tente novamente.";
+        } else if (errorMessage.includes("timeout")) {
+            userMessage = "A requisição demorou muito. Tente novamente.";
+        }
+        
         return NextResponse.json(
-            { error: `Erro na geração: ${error.message || error}` },
+            { error: userMessage },
             { status: 500 }
         );
     }

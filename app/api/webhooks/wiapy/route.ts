@@ -14,23 +14,44 @@ export async function POST(req: Request) {
         const authHeader = req.headers.get('authorization');
         const webhookToken = process.env.WIAPY_WEBHOOK_TOKEN;
 
-        if (!webhookToken || authHeader !== webhookToken) {
+        if (!webhookToken) {
+            console.error("WIAPY_WEBHOOK_TOKEN não configurada");
+            return NextResponse.json({ error: "Configuração do servidor inválida" }, { status: 500 });
+        }
+
+        if (!authHeader || authHeader !== webhookToken) {
+            console.warn("Tentativa de acesso não autorizada ao webhook");
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
         // 2. Parse Payload
-        const payload = await req.json();
+        let payload;
+        try {
+            payload = await req.json();
+        } catch (parseError) {
+            console.error("Erro ao fazer parse do payload:", parseError);
+            return NextResponse.json({ error: "Payload inválido" }, { status: 400 });
+        }
+
         const { payment, customer, products } = payload;
+
+        // Validação de estrutura do payload
+        if (!payment || !customer || !products || !Array.isArray(products) || products.length === 0) {
+            console.error("Payload incompleto:", { payment: !!payment, customer: !!customer, products: !!products });
+            return NextResponse.json({ error: "Payload incompleto" }, { status: 400 });
+        }
 
         // 3. Check Payment Status
         if (payment?.status !== 'approved') {
-            return NextResponse.json({ message: "Ignored: Payment not approved" });
+            console.log(`Pagamento não aprovado: ${payment?.status}`);
+            return NextResponse.json({ message: "Ignored: Payment not approved" }, { status: 200 });
         }
 
         // 4. Identify User
         const email = customer?.email;
-        if (!email) {
-            return NextResponse.json({ error: "No email provided" }, { status: 400 });
+        if (!email || typeof email !== 'string' || !email.includes('@')) {
+            console.error("Email inválido ou ausente:", email);
+            return NextResponse.json({ error: "Email inválido ou ausente" }, { status: 400 });
         }
 
         const supabase = await createClient();
@@ -91,8 +112,17 @@ export async function POST(req: Request) {
         // I will try to find the profile.
         // If I can't find it, I'll log an error.
 
-        const productId = products?.[0]?.id;
-        const planInfo = PLANS[productId as keyof typeof PLANS] || { duration: 30 }; // Default 30 days
+        const productId = products[0]?.id;
+        if (!productId) {
+            console.error("Product ID não encontrado no payload");
+            return NextResponse.json({ error: "Product ID não encontrado" }, { status: 400 });
+        }
+
+        const planInfo = PLANS[productId as keyof typeof PLANS];
+        if (!planInfo) {
+            console.error(`Plano não reconhecido: ${productId}`);
+            return NextResponse.json({ error: `Plano não reconhecido: ${productId}` }, { status: 400 });
+        }
 
         const daysToAdd = planInfo.duration;
         const newExpiry = new Date();
@@ -130,11 +160,24 @@ export async function POST(req: Request) {
         }
 
         // Try to find user ID by email using Admin Auth
-        const { data: { users }, error: userError } = await adminSupabase.auth.admin.listUsers();
-        const user = users?.find(u => u.email === email);
+        let users;
+        try {
+            const { data, error: userError } = await adminSupabase.auth.admin.listUsers();
+            if (userError) {
+                console.error("Erro ao listar usuários:", userError);
+                return NextResponse.json({ error: "Erro ao buscar usuário" }, { status: 500 });
+            }
+            users = data?.users;
+        } catch (listError) {
+            console.error("Exceção ao listar usuários:", listError);
+            return NextResponse.json({ error: "Erro ao buscar usuário" }, { status: 500 });
+        }
+
+        const user = users?.find(u => u.email?.toLowerCase() === email.toLowerCase());
 
         if (!user) {
-            return NextResponse.json({ error: "User not found" }, { status: 404 });
+            console.warn(`Usuário não encontrado para o email: ${email}`);
+            return NextResponse.json({ error: "Usuário não encontrado. Certifique-se de que a conta foi criada." }, { status: 404 });
         }
 
         // Update Profile
@@ -148,14 +191,26 @@ export async function POST(req: Request) {
             .eq('id', user.id);
 
         if (updateError) {
-            console.error("Error updating profile:", updateError);
-            return NextResponse.json({ error: "Update failed" }, { status: 500 });
+            console.error("Erro ao atualizar perfil:", updateError);
+            return NextResponse.json({ 
+                error: "Falha ao atualizar perfil",
+                details: updateError.message 
+            }, { status: 500 });
         }
 
-        return NextResponse.json({ success: true, message: `Plan updated to Performance for ${daysToAdd} days` });
+        console.log(`Perfil atualizado com sucesso para ${email} - Plano: ${planInfo.name}, Expira em: ${newExpiry.toISOString()}`);
+        return NextResponse.json({ 
+            success: true, 
+            message: `Plano atualizado para Performance por ${daysToAdd} dias`,
+            expires_at: newExpiry.toISOString()
+        });
 
     } catch (error: any) {
-        console.error("Webhook Error:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        console.error("Erro no webhook:", error);
+        const errorMessage = error?.message || "Erro desconhecido";
+        return NextResponse.json({ 
+            error: "Erro interno do servidor",
+            details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+        }, { status: 500 });
     }
 }
