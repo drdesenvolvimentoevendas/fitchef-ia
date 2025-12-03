@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import InstallModal from "@/components/InstallModal";
+
 
 const inter = Inter({
   variable: "--font-inter",
@@ -31,7 +31,6 @@ export default function RootLayout({
         suppressHydrationWarning
         className={`${inter.variable} antialiased`}
       >
-        <InstallModal />
         {children}
       </body>
     </html>
