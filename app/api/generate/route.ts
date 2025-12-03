@@ -234,7 +234,7 @@ export async function POST(req: Request) {
 
         // Generate Image URL
         const imagePrompt = recipe.imagePrompt || `delicious food photography of ${recipe.title}`;
-        const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(imagePrompt)}, professional food photography, 4k, high detail, appetizing, soft lighting?width=800&height=600&nologo=true`;
+        const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(imagePrompt)}, professional food photography, 4k, high detail, appetizing, soft lighting?width=800&height=600&nologo=true&seed=${Math.floor(Math.random() * 10000)}`;
         recipe.imageUrl = imageUrl;
 
         // Save Recipe to History

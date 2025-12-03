@@ -220,7 +220,7 @@ export default function ProfilePage() {
                                         </span>
                                         <span className="flex items-center gap-1">
                                             <ChefHat className="w-4 h-4" />
-                                            {item.recipe_data.calories || 'N/A'} kcal
+                                            {item.recipe_data.calories || item.recipe_data.total_calories || 'N/A'} kcal
                                         </span>
                                     </div>
                                     <button
